@@ -57,6 +57,11 @@ int State::evaluate(){
             case (char)1://pawn
               //piece is on board, add value
               evaluation += 20+40*(-1*side);
+              //also add value based on distance traveled on the board
+              int bonusdist = 0;
+              if(side == 0) bonusdist = BOARD_H-1-i;
+              if(side == 1) bonusdist = i-1;
+              evaluation += bonusdist*(2+4*(-1*side));
               //check for dominated spaces
               for(int check = 0; check < 2; check++) {
                 int checky = i+(1+2*(-1*opposing[side]));
