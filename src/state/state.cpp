@@ -5,6 +5,27 @@
 #include "./state.hpp"
 #include "../config.hpp"
 
+static const int move_table_rook_bishop[8][7][2] = {
+  {{0, 1}, {0, 2}, {0, 3}, {0, 4}, {0, 5}, {0, 6}, {0, 7}},
+  {{0, -1}, {0, -2}, {0, -3}, {0, -4}, {0, -5}, {0, -6}, {0, -7}},
+  {{1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}, {6, 0}, {7, 0}},
+  {{-1, 0}, {-2, 0}, {-3, 0}, {-4, 0}, {-5, 0}, {-6, 0}, {-7, 0}},
+  {{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7}},
+  {{1, -1}, {2, -2}, {3, -3}, {4, -4}, {5, -5}, {6, -6}, {7, -7}},
+  {{-1, 1}, {-2, 2}, {-3, 3}, {-4, 4}, {-5, 5}, {-6, 6}, {-7, 7}},
+  {{-1, -1}, {-2, -2}, {-3, -3}, {-4, -4}, {-5, -5}, {-6, -6}, {-7, -7}},
+};
+static const int move_table_knight[8][2] = {
+  {1, 2}, {1, -2},
+  {-1, 2}, {-1, -2},
+  {2, 1}, {2, -1},
+  {-2, 1}, {-2, -1},
+};
+static const int move_table_king[8][2] = {
+  {1, 0}, {0, 1}, {-1, 0}, {0, -1}, 
+  {1, 1}, {1, -1}, {-1, 1}, {-1, -1},
+};
+
 
 /**
  * @brief evaluate the state
@@ -13,7 +34,237 @@
  */
 int State::evaluate(){
   // [TODO] design your own evaluation function
-  return 0;
+  
+  /**
+   * The function will analyze depending on the following:
+   * Every piece has a value, except for the king. 
+   * The value is the following: 180 for queen, 100 for rook, 
+   * 70 for bishop, 60 for knight, and 20 for every pawn, +4 for every position increased.
+   * In addition, there are two other things that affect evaluation.
+   * Any pinned piece will be worth (base value/4)-10 instead.
+   * Any unique unoccupied square that can be used to attack is worth +2. 
+   */
+  int evaluation = 0;
+  int opposing[] = {1, 0};
+  int piecevalue[7] = {2, 20, 100, 60, 70, 180, 1073741823};
+
+  for(int side = 0; side < 2; side++){
+    bool occupied[BOARD_H][BOARD_W];
+    for(int i = 0; i < BOARD_H; i++){
+      for(int j = 0; j < BOARD_W; j++){
+        char curpiece = this->board.board[side][i][j];
+        switch(curpiece){
+            case (char)1://pawn
+              //piece is on board, add value
+              evaluation += 20+40*(-1*side);
+              //check for dominated spaces
+              for(int check = 0; check < 2; check++) {
+                int checky = i+(1+2*(-1*opposing[side]));
+                int checkx = j-1+(2*check);
+                if(checkx < 0 || checkx >= BOARD_W) continue;
+                if(this->board.board[opposing[side]][checky][checkx] == (char)0 &&
+                   this->board.board[side]          [checky][checkx] == (char)0){
+                  if(!occupied[checky][checkx]){
+                    occupied[checky][checkx] = true;
+                    evaluation += 2+4*(-1*side);
+                  }
+                }
+                //king-piece check
+                if(this->board.board[opposing[side]][checky][checkx] == (char)6) if(player == side) evaluation -= piecevalue[6]+2*piecevalue[6]*(-1*opposing[side]);
+              }
+              break;
+            case (char)2://rook
+              //piece is on board, add value
+              evaluation += 100+200*(-1*side);
+              //check for dominated pieces
+              int dirtablex[4] = {-1, 1, 0, 0};
+              int dirtabley[4] = {0, 0, -1, 1};
+              //left, right, down, up for empty spaces
+              for(int direction = 0; direction < 4; direction++){
+                int checkx = j+dirtablex[direction], checky = i+dirtabley[direction];
+                char pintype = (char)0;
+                while(checkx >= 0 && checkx < BOARD_W && checky >= 0 && checky < BOARD_H){
+                  //add to evaluation if the tile is empty and no tiles are being checked for pin
+                  if(this->board.board[side]          [checky][checkx] == (char)0 && 
+                     this->board.board[opposing[side]][checky][checkx] == (char)0 &&
+                     pintype == (char)0){
+                    if(!occupied[checky][checkx]){
+                      occupied[checky][checkx] = true;
+                      evaluation += 2+4*(-1*side);
+                    }
+                  } 
+                  else{
+                    //is a friendly piece in the way?
+                    if(this->board.board[side][checky][checkx] != (char)0) break;
+                    else{
+                      if(pintype == (char)0) {
+                        //king-piece check
+                        if(this->board.board[opposing[side]][checky][checkx] == (char)6) {
+                          if(player == side) evaluation -= piecevalue[6]+2*piecevalue[6]*(-1*opposing[side]);
+                          break;
+                        }
+                        else pintype = this->board.board[opposing[side]][checky][checkx];
+                      }
+                      else if(this->board.board[opposing[side]][checky][checkx] == (char)6 && pintype != (char)0){
+                        //pin to enemy king detected, remove piece value and use the pin piece value formula instead
+                        int basevalue = piecevalue[(int)pintype]+2*piecevalue[(int)pintype]*(-1*opposing[side]);
+                        evaluation -= basevalue;
+                        evaluation += (basevalue/4)-(10+20*(-1*opposing[side]));
+                        break;
+                      }
+                      else break;
+                    }
+                  }
+                  //increment and continue to iterate
+                  checkx += dirtablex[direction]; checky += dirtabley[direction];
+                }
+              }
+              break;
+            case (char)3://knight
+              //piece is on board, add value
+              evaluation += 60+120*(-1*side);
+              //check for empty spaces
+              for(int check = 0; check < 8; check++){
+                int checkx = j + move_table_knight[check][1], checky = i + move_table_knight[check][0];
+                //bounds check
+                if(checkx >= 0 && checkx < BOARD_W && checky >= 0 && checky < BOARD_H){
+                  //collision check
+                  if(this->board.board[side][checky][checkx]           == (char)0 &&
+                     this->board.board[opposing[side]][checky][checkx] == (char)0){
+                    //unique check
+                    if(!occupied[checky][checkx]){
+                      occupied[checky][checkx] = true;
+                      evaluation += 2+4*(-1*side);
+                    }
+                  }
+                }
+              }
+              break;
+            case (char)4://bishop
+              //piece is on board, add value
+              evaluation += 70+140*(-1*side);
+              //check for empty spaces
+              for(int check = 4; check < 8; check++){
+                int iteration = 0;
+                int checkx = j + move_table_rook_bishop[check][iteration][1], checky = i + move_table_rook_bishop[check][iteration][0];
+                char pintype = (char)0;
+                //while in bounds
+                while(checkx >= 0 && checkx < BOARD_W && checky >= 0 && checky < BOARD_H){
+                  //collision check
+                  if(this->board.board[side][checky][checkx]           == (char)0 &&
+                     this->board.board[opposing[side]][checky][checkx] == (char)0 &&
+                     pintype == (char)0){
+                    //unique check
+                    if(!occupied[checky][checkx]){
+                      occupied[checky][checkx] = true;
+                      evaluation += 2+4*(-1*side);
+                    }
+                  }
+                  else{
+                    //break if friendly piece is touched
+                    if(this->board.board[side][checky][checkx] != (char)0) break;
+                    else{
+                      if(pintype == (char)0) {
+                        //king-piece check
+                        if(this->board.board[opposing[side]][checky][checkx] == (char)6) {
+                          if(player == side) evaluation -= piecevalue[6]+2*piecevalue[6]*(-1*opposing[side]);
+                          break;
+                        }
+                        else pintype = this->board.board[opposing[side]][checky][checkx];
+                      }
+                      else if(this->board.board[opposing[side]][checky][checkx] == (char)6 && pintype != (char)0){
+                        //pin detected, change piece evaluation
+                        int basevalue = piecevalue[(int)pintype]+2*piecevalue[(int)pintype]*(-1*opposing[side]);
+                        evaluation -= basevalue;
+                        evaluation += (basevalue/4)-(10+20*(-1*opposing[side]));
+                        break;
+                      }
+                      else break;
+                    }
+                  }
+                  //continue iteration
+                  iteration++; checkx = j + move_table_rook_bishop[check][iteration][1], checky = i + move_table_rook_bishop[check][iteration][0];
+                }
+              }
+              break;
+            case (char)5://queen
+              //piece is on board, add value
+              evaluation += 180+360*(-1*side);
+              //check for empty spaces
+              for(int check = 0; check < 8; check++){
+                int iteration = 0;
+                int checkx = j + move_table_rook_bishop[check][iteration][1], checky = i + move_table_rook_bishop[check][iteration][0];
+                char pintype = (char)0;
+                //while in bounds
+                while(checkx >= 0 && checkx < BOARD_W && checky >= 0 && checky < BOARD_H){
+                  //collision check
+                  if(this->board.board[side][checky][checkx]           == (char)0 &&
+                     this->board.board[opposing[side]][checky][checkx] == (char)0 &&
+                     pintype == (char)0){
+                    //unique check
+                    if(!occupied[checky][checkx]){
+                      occupied[checky][checkx] = true;
+                      evaluation += 2+4*(-1*side);
+                    }
+                  }
+                  else{
+                    //break if friendly piece is touched
+                    if(this->board.board[side][checky][checkx] != (char)0) break;
+                    else{
+                      if(pintype == (char)0) {
+                        //king-piece check
+                        if(this->board.board[opposing[side]][checky][checkx] == (char)6) {
+                          if(player == side) evaluation -= piecevalue[6]+2*piecevalue[6]*(-1*opposing[side]);
+                          break;
+                        }
+                        else pintype = this->board.board[opposing[side]][checky][checkx];
+                      }
+                      else if(this->board.board[opposing[side]][checky][checkx] == (char)6 && pintype != (char)0){
+                        //pin detected, change piece evaluation
+                        int basevalue = piecevalue[(int)pintype]+2*piecevalue[(int)pintype]*(-1*opposing[side]);
+                        evaluation -= basevalue;
+                        evaluation += (basevalue/4)-(10+20*(-1*opposing[side]));
+                        break;
+                      }
+                      else break;
+                    }
+                  }
+                  //continue iteration
+                  iteration++; checkx = j + move_table_rook_bishop[check][iteration][1], checky = i + move_table_rook_bishop[check][iteration][0];
+                }
+              }
+              break;
+            case (char)6://king
+              //check for empty spaces
+              for(int check = 0; check < 8; check++){
+                int checkx = j + move_table_king[check][1], checky = i + move_table_king[check][0];
+                //bounds check
+                if(checkx >= 0 && checkx < BOARD_W && checky >= 0 && checky < BOARD_H){
+                  //collision check
+                  if(this->board.board[side][checky][checkx]           == (char)0 &&
+                     this->board.board[opposing[side]][checky][checkx] == (char)0){
+                    //unique check
+                    if(!occupied[checky][checkx]){
+                      occupied[checky][checkx] = true;
+                      evaluation += 2+4*(-1*side);
+                    }
+                  }
+                  //king-piece(king??) check... shouldn't be possible for a real game, but the system doesn't play by real rules. lol
+                  if(this->board.board[opposing[side]][checky][checkx] == (char)6) if(player == side) evaluation -= piecevalue[6]+2*piecevalue[6]*(-1*opposing[side]);
+                }
+              }
+              break;
+            default:
+              break;
+        }
+      }
+    }
+  }
+  // flip signs if the state is for the second player.
+  if(player == 1) evaluation = -evaluation;
+
+  //return calculated evaluation parameter
+  return evaluation;
 }
 
 
@@ -45,29 +296,6 @@ State* State::next_state(Move move){
     next_state->get_legal_actions();
   return next_state;
 }
-
-
-static const int move_table_rook_bishop[8][7][2] = {
-  {{0, 1}, {0, 2}, {0, 3}, {0, 4}, {0, 5}, {0, 6}, {0, 7}},
-  {{0, -1}, {0, -2}, {0, -3}, {0, -4}, {0, -5}, {0, -6}, {0, -7}},
-  {{1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}, {6, 0}, {7, 0}},
-  {{-1, 0}, {-2, 0}, {-3, 0}, {-4, 0}, {-5, 0}, {-6, 0}, {-7, 0}},
-  {{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7}},
-  {{1, -1}, {2, -2}, {3, -3}, {4, -4}, {5, -5}, {6, -6}, {7, -7}},
-  {{-1, 1}, {-2, 2}, {-3, 3}, {-4, 4}, {-5, 5}, {-6, 6}, {-7, 7}},
-  {{-1, -1}, {-2, -2}, {-3, -3}, {-4, -4}, {-5, -5}, {-6, -6}, {-7, -7}},
-};
-static const int move_table_knight[8][2] = {
-  {1, 2}, {1, -2},
-  {-1, 2}, {-1, -2},
-  {2, 1}, {2, -1},
-  {-2, 1}, {-2, -1},
-};
-static const int move_table_king[8][2] = {
-  {1, 0}, {0, 1}, {-1, 0}, {0, -1}, 
-  {1, 1}, {1, -1}, {-1, 1}, {-1, -1},
-};
-
 
 /**
  * @brief get all legal actions of now state
