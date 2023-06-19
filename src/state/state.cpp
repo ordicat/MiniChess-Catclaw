@@ -42,11 +42,10 @@ int State::evaluate(){
    * 70 for bishop, 60 for knight, and 20 for every pawn, +1 for every position increased.
    * In addition, there are two other things that affect evaluation.
    * Any pinned piece will be worth (base value/4)-10 instead.
-   * Any unique unoccupied square that can be used to attack is worth +3. 
-   * in addition, taking control of the center board will grant 3+(base value*0.25) more.
+   * Any unique unoccupied square that can be used to attack is worth +1. 
+   * in addition, taking control of the center board will grant +3 more.
    */
   int evaluation = 0;
-  int bonusdist = 0;
   int opposing[] = {1, 0};
   int piecevalue[7] = {2, 20, 100, 60, 70, 180, 1073741823};
   int centerpos[2][2] = {{2, 2},{3,2}};
@@ -55,7 +54,8 @@ int State::evaluate(){
     bool occupied[BOARD_H][BOARD_W];
     for(int i = 0; i < BOARD_H; i++){
       for(int j = 0; j < BOARD_W; j++){
-        char curpiece = this->board.board[side][i][j], pincheck = (char)0;
+        char curpiece = this->board.board[side][i][j];
+        if(curpiece == (char)0) continue; //go to next check if space is empty
         int basevalue = piecevalue[(int)curpiece], iterstart = 0, iterend = 0, pieceeval = 0;
         switch(curpiece){//show range used in iteration table from move table prev defined
           case (char)2:
@@ -73,6 +73,95 @@ int State::evaluate(){
         }
         //add base value
         pieceeval += basevalue;
+        //position check: pieces near the center of the board have extra value.
+        for(int ch = 0 ; ch < 2; ch++) if(i==centerpos[ch][0] && j==centerpos[ch][1]) {
+          pieceeval += 3;
+          if(curpiece == (char)1) pieceeval++; //slightly prefer pawns in the center.
+        }
+        //pawn specific checks.
+        if(curpiece == (char)1){
+          int checktable[2][2] = {{-1, -1},{-1, 1}};
+          if(side==0)
+            pieceeval += (BOARD_H-1)-i; //+1 eval per rank gained
+          else
+            pieceeval += i-1;
+          //pawn exclusive space checks.
+          for(int ch = 0; ch < 2; ch++){
+            int checkx = j+checktable[ch][1], checky;
+            if(side==1)
+              checky = i-checktable[ch][0];
+            else
+              checky = i+checktable[ch][0];
+            if(checkx < 0 || checkx >= BOARD_W || checky < 0 || checky >= BOARD_H) continue; //go to next cycle if check is OOB  
+            //empty space check
+            if(this->board.board[side][checky][checkx] == (char)0 && this->board.board[opposing[side]][checky][checkx] == (char)0){
+              //unique space check
+              if(!occupied[checky][checkx]){
+                occupied[checky][checkx] = true;
+                pieceeval += 1;
+              }
+            }
+            //king piece check
+            if(this->board.board[opposing[side]][checky][checkx] == (char)6){
+              //current player turn?
+              if(player==side)pieceeval += piecevalue[6];
+            }
+          }
+        }
+        //knight specific checks.
+        else if(curpiece == (char)3){
+          for(int ch = iterstart; ch < iterend; ch++){
+            int checkx = j+move_table_knight[ch][1], checky = i+move_table_knight[ch][0];
+            if(checkx < 0 || checkx >= BOARD_W || checky < 0 || checky >= BOARD_H) continue; //go to next cycle if check is OOB
+            if(this->board.board[side][checky][checkx] == (char)0 && this->board.board[opposing[side]][checky][checkx] == (char)0){
+              //unique space check
+              if(!occupied[checky][checkx]){
+                occupied[checky][checkx] = true;
+                pieceeval += 1;
+              }
+            }
+            //king piece check
+            if(this->board.board[opposing[side]][checky][checkx] == (char)6){
+              //current player turn?
+              if(player==side)pieceeval += piecevalue[6];
+            }  
+          }
+        }
+        //other piece checks.
+        else{
+          for(int ch = iterstart; ch < iterend; ch++){
+            int cycle = 7;
+            if(curpiece == (char)6) cycle = 1; //only check over one distance if king.
+            for(int dis = 0; dis < cycle; dis++){
+              char pincheck = (char)0;
+              int checkx = j+move_table_rook_bishop[ch][dis][1], checky = i+move_table_rook_bishop[ch][dis][0];
+
+              char ownside = this->board.board[side][checky][checkx], opposingside = this->board.board[opposing[side]][checky][checkx];
+              if(ownside == (char)0 && opposingside == (char)0){
+                //unique space check
+                if(!occupied[checky][checkx] && !pincheck){
+                  occupied[checky][checkx] = true;
+                  pieceeval += 1;
+                }
+              }
+              //something collided, check what happened
+              else if(pincheck == (char)0){
+                //king piece check
+                if(opposingside == (char)6){
+                  pieceeval += piecevalue[6];
+                  break;
+                }
+                //king piece piece check (or check for pinned pieces)
+                else if(!ownside) pincheck = opposingside;
+              }
+              //cleared kpp check
+              else if(pincheck && opposingside == (char)6){
+                pieceeval += piecevalue[(int)pincheck];
+                pieceeval -= (piecevalue[(int)pincheck])-10;
+              }
+            }
+          }
+        }
         //end: if on black then flip sign
         if(side == 1) pieceeval = -pieceeval;
         evaluation += pieceeval;

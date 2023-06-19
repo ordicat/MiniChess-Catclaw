@@ -1,9 +1,10 @@
 #include <cstdlib>
+#include <algorithm>
+#include <queue>
+#include <iostream>
 
 #include "../state/state.hpp"
 #include "./minmax.hpp"
-
-#define MAXDEPTH 3
 
 /**
  * @brief Get an action from MinMax algorithm
@@ -12,20 +13,49 @@
  * @param depth You may need this for other policy
  * @return Move 
  */
-Move MinMax::get_move(State *state, int depth){
-  // placeholder code here. it is purely state-value for now!
-    if(!state->legal_actions.size())
-    state->get_legal_actions();
-    Move bestmove;
-    int maxeval = 0;
-    for(auto it : state->legal_actions){
-        State *tempmove = state->next_state(it);
-        int tempeval = tempmove->evaluate();
-        if(state->player == 0) tempeval = -tempeval;
-        if(tempeval > maxeval){ //keep oldest value
-            bestmove = it;
-            maxeval = tempeval;
-        }
+const Move nomove = {{0,0},{0,0}};
+
+struct statequeue{
+    Move move;
+    int heuristic;
+    friend bool operator<(const statequeue& lhs, const statequeue& rhs) {
+        return lhs.heuristic < rhs.heuristic;
     }
+};
+
+int MinMax:: minimax(State *state, int depth, bool max){
+    if(depth == 0 || state->game_state != NONE) return state->evaluate();
+    if(max){
+        int value = -2147483648;
+        for(auto it : state->legal_actions)
+            value = std::max(value, minimax(state->next_state(it), depth-1, false));
+        return value;
+    }
+    else{
+        int value = 2147483647;
+        for(auto it : state->legal_actions)
+            value = std::min(value, minimax(state->next_state(it), depth-1, true));
+        return value;
+    }
+}
+
+Move MinMax::get_move(State *state, int depth){
+    std::priority_queue<statequeue> beststate;
+    if(state->legal_actions.empty()) state->get_legal_actions();
+    for(auto it = state->legal_actions.begin(); it != state->legal_actions.end(); it++){
+        statequeue temp;
+        temp.move = *it;
+        temp.heuristic = minimax(state->next_state(temp.move), depth, true);
+        beststate.push(temp);
+    }
+    
+    Move bestmove;
+    //failsafe: if queue is empty or best move is no move then do a random move 
+    //if(bestmove == nomove || beststate.empty()){
+    if(true){//testing output for now
+        auto actions = state->legal_actions;
+        return actions[(rand()+depth)%actions.size()];
+    }
+    else bestmove = beststate.top().move;
     return bestmove;
 }

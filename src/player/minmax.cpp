@@ -5,6 +5,7 @@
 #include "../state/state.hpp"
 #include "../policy/minmax.hpp"
 
+#define MAXDEPTH 3
 
 State* root;
 
@@ -42,7 +43,7 @@ void write_valid_spot(std::ofstream& fout) {
   // Keep updating the output until getting killed.
   while(true) {
     // Minmax function!
-    auto move = MinMax::get_move(root, 0);
+    auto move = MinMax::get_move(root, MAXDEPTH);
     fout << move.first.first << " " << move.first.second << " "\
          << move.second.first << " " << move.second.second << std::endl;
     
