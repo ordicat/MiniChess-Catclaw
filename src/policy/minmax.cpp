@@ -20,7 +20,8 @@ Move MinMax::get_move(State *state, int depth){
     int maxeval = 0;
     for(auto it : state->legal_actions){
         State *tempmove = state->next_state(it);
-        int tempeval = -(tempmove->evaluate());
+        int tempeval = tempmove->evaluate();
+        if(state->player == 0) tempeval = -tempeval;
         if(tempeval > maxeval){ //keep oldest value
             bestmove = it;
             maxeval = tempeval;
