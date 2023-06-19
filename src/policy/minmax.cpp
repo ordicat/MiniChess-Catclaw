@@ -49,13 +49,12 @@ Move MinMax::get_move(State *state, int depth){
         beststate.push(temp);
     }
     
-    Move bestmove;
+    Move bestmove = beststate.top().move;
     //failsafe: if queue is empty or best move is no move then do a random move 
-    //if(bestmove == nomove || beststate.empty()){
-    if(true){//testing output for now
+    if(bestmove == nomove || beststate.empty()){
+    //if(true){//testing output for now
         auto actions = state->legal_actions;
         return actions[(rand()+depth)%actions.size()];
     }
-    else bestmove = beststate.top().move;
     return bestmove;
 }
