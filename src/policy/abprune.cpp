@@ -1,6 +1,6 @@
 #include <cstdlib>
 #include <algorithm>
-#include <queue>
+#include <set>
 #include <iostream>
 
 #include "../state/state.hpp"
@@ -48,19 +48,25 @@ int ABprune:: alphabeta(State *state, int depth, int alpha, int beta, bool max){
 }
 
 Move ABprune::get_move(State *state, int depth){
-    std::priority_queue<statequeue> beststate;
+    std::set<statequeue> beststate;
     if(state->legal_actions.empty()) state->get_legal_actions();
     for(auto it = state->legal_actions.begin(); it != state->legal_actions.end(); it++){
         statequeue temp;
         temp.move = *it;
-        temp.heuristic = alphabeta(state->next_state(temp.move), depth, -INF, INF, true);
-        beststate.push(temp);
+        temp.heuristic = alphabeta(state->next_state(temp.move), depth, -INF, INF, false);//we want the opponent to have the worst move after we move
+        beststate.insert(temp);
     }
     
-    Move bestmove = beststate.top().move;
+    Move bestmove = nomove;
+    for(auto states = beststate.begin(); states != beststate.end(); states++){
+        State* tempstate = state-> next_state(states->move);
+        if(tempstate->game_state != WIN) {
+            bestmove = states->move;
+            break;
+        }
+    }
     //failsafe: if queue is empty or best move is no move then do a random move 
     if(bestmove == nomove || beststate.empty()){
-    //if(true){//testing output for now
         auto actions = state->legal_actions;
         return actions[(rand()+depth)%actions.size()];
     }

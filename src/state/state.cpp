@@ -26,7 +26,7 @@ static const int move_table_king[8][2] = {
   {1, 1}, {1, -1}, {-1, 1}, {-1, -1},
 };
 
-
+const Move nomove = {{0,0},{0,0}};
 /**
  * @brief evaluate the state
  * 
@@ -34,24 +34,15 @@ static const int move_table_king[8][2] = {
  */
 int State::evaluate(){
   // [TODO] design your own evaluation function
-  
-  /**
-   * The function will analyze depending on the following:
-   * Every piece has a value, except for the king. 
-   * The value is the following: 180 for queen, 100 for rook, 
-   * 70 for bishop, 60 for knight, and 20 for every pawn, +1 for every position increased.
-   * In addition, there are two other things that affect evaluation.
-   * Any pinned piece will be worth (base value/4)-10 instead.
-   * Any unique unoccupied square that can be used to attack is worth +1. 
-   * in addition, taking control of the center board will grant +3 more.
-   */
+
   int evaluation = 0;
   int opposing[] = {1, 0};
-  int piecevalue[7] = {2, 20, 100, 60, 70, 180, 1073741823};
+  int piecevalue[7] = {2, 20, 100, 60, 70, 180, 1000};
   int centerpos[2][2] = {{2, 2},{3,2}};
 
   for(int side = 0; side < 2; side++){
     bool occupied[BOARD_H][BOARD_W];
+    //check the board.
     for(int i = 0; i < BOARD_H; i++){
       for(int j = 0; j < BOARD_W; j++){
         char curpiece = this->board.board[side][i][j];
@@ -102,8 +93,8 @@ int State::evaluate(){
             if(this->board.board[opposing[side]][checky][checkx] != (char)0){
               //king piece check
               if(this->board.board[opposing[side]][checky][checkx] == (char)6){
-                //current player turn?
-                if(player==side)pieceeval += piecevalue[6];
+                if(player == side) pieceeval += piecevalue[6]<<3;
+                else pieceeval += piecevalue[6];
               }
               else pieceeval += piecevalue[(int)this->board.board[opposing[side]][checky][checkx]]>>2;
             }
@@ -126,14 +117,27 @@ int State::evaluate(){
             if(this->board.board[opposing[side]][checky][checkx] != (char)0){
               //king piece check
               if(this->board.board[opposing[side]][checky][checkx] == (char)6){
-                //current player turn?
-                if(player==side)pieceeval += piecevalue[6];
+                if(player == side) pieceeval += piecevalue[6]<<3;
+                else pieceeval += piecevalue[6];
               }
               else pieceeval += piecevalue[(int)this->board.board[opposing[side]][checky][checkx]]>>2;
             }
             //friendly piece check
             if(this->board.board[side][checky][checkx] != (char)0 || this->board.board[side][checky][checkx] != (char)6)
               pieceeval += piecevalue[(int)this->board.board[side][checky][checkx]]>>3;  
+          }
+        }
+        else if(curpiece == (char)6){ //king piece specific checks
+          for(int ch = iterstart; ch < iterend; ch++){
+            int checky = i+move_table_king[ch][1], checkx = j+move_table_king[ch][0];
+            char friendpiece = this->board.board[side][checky][checkx], enemypiece = this->board.board[opposing[side]][checky][checkx];
+            if(friendpiece){
+              if(friendpiece == (char)1) pieceeval += 2;
+              else pieceeval += 1; //prefer pawns protecting the king over other pieces
+            }
+            if(enemypiece){
+              pieceeval -= piecevalue[6]>>1; //don't have king near other pieces!
+            }
           }
         }
         //other piece checks.
@@ -149,30 +153,28 @@ int State::evaluate(){
               //empty space + unique space check
               if(this->board.board[side][checky][checkx] == (char)0 && this->board.board[opposing[side]][checky][checkx] == (char)0 && occupied[checky][checkx]){
                 occupied[checky][checkx] = true;
-                pieceeval += 1;
+                if(curpiece == (char)6) pieceeval -= 1;
+                else pieceeval += 1;
               }
               char ownside = this->board.board[side][checky][checkx], opposingside = this->board.board[opposing[side]][checky][checkx];
               //own piece collision check
               if(ownside != (char)0) {
-                if(ownside != (char)6) pieceeval += piecevalue[(int)this->board.board[side][checky][checkx]]>>3;
+                if(ownside != (char)6) pieceeval += 2;
                 if(curpiece == (char)6) pieceeval += 3; //flat 3 eval increase for every friendly piece surrounding king
                 break;
               }
-              //something collided, check what happened
-              if(pincheck == (char)0 && opposingside != (char)0){
+              if(opposingside != (char)0){
                 //king piece check
                 if(opposingside == (char)6){
-                  pieceeval += piecevalue[6];
+                  if(player == side) pieceeval += piecevalue[6]<<3;
+                  else pieceeval += piecevalue[6];
                   break;
                 }
-                //else if(curpiece == (char)6) {pieceeval -= piecevalue[(int)opposingside]; break;}//king piece should be nowhere near the enemy piece!!
-                //king piece piece check (or check for pinned pieces)
-                else if(!ownside) pincheck = opposingside;
-              }
-              //cleared kpp check
-              else if(pincheck && opposingside == (char)6){
-                pieceeval += piecevalue[(int)pincheck];
-                pieceeval -= (piecevalue[(int)pincheck])-10;
+                else{
+                  if(piecevalue[(int)opposingside] <= piecevalue[(int)curpiece])pieceeval += piecevalue[(int)opposingside]>>1;
+                  else pieceeval += piecevalue[(int)opposingside]>>3;
+                  break;
+                }
               }
             }
           }
@@ -182,6 +184,13 @@ int State::evaluate(){
         evaluation += pieceeval;
       }
     }
+    int moves = this->legal_actions.size();
+    if(player != side){
+      State* tempstate = this->next_state(nomove);
+      tempstate ->get_legal_actions();
+      moves = tempstate->legal_actions.size();
+    }
+    evaluation += moves*3;
   }
   // flip signs if the state is for the second player.
   if(player == 1) evaluation = -evaluation;

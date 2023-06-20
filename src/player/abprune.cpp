@@ -5,7 +5,7 @@
 #include "../state/state.hpp"
 #include "../policy/abprune.hpp"
 
-#define MAXDEPTH 5
+#define MAXDEPTH 4
 
 State* root;
 
@@ -35,7 +35,7 @@ void read_board(std::ifstream& fin) {
 
 
 /**
- * @brief randomly choose a move and then write it into output file
+ * @brief choose a move and then write it into output file
  * 
  * @param fout 
  */
