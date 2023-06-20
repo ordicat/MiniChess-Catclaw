@@ -165,6 +165,7 @@ int State::evaluate(){
                   pieceeval += piecevalue[6];
                   break;
                 }
+                //else if(curpiece == (char)6) {pieceeval -= piecevalue[(int)opposingside]; break;}//king piece should be nowhere near the enemy piece!!
                 //king piece piece check (or check for pinned pieces)
                 else if(!ownside) pincheck = opposingside;
               }
